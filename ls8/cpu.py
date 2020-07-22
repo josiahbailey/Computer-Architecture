@@ -26,10 +26,8 @@ class CPU:
         with open(f'ls8/examples/{file_}') as f:
             for line in f:
                 line = line.split("#")
-                # print(line)
                 try:
                     v = int(line[0])
-                    # print(v)
                     program.append(v)
                 except ValueError:
                     continue
@@ -42,16 +40,13 @@ class CPU:
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
-        # op = op.upper()
 
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
-        elif op == "HLT":
-            self.running = False
-        elif op == "LDI":
-            self.reg[reg_a] = reg_b
-        elif op == "PRN":
-            print(self.ram_read(int(reg_a)))
+        elif op == "SUB":
+            self.reg[reg_a] -= self.reg[reg_b]
+        elif op == "MLT":
+            self.reg[reg_a] *= self.reg[reg_b]
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -89,22 +84,56 @@ class CPU:
         """Run the CPU."""
         self.running = True
 
+        def HLT():
+            self.running = False
+
+        def LDI(register, value):
+            self.reg[register] = value
+
+        def PRN(register):
+            print(self.reg[register])
+
+        def MLT(op, reg_1, reg_2):
+            self.alu(op, reg_1, reg_2)
+
         ops = {
-            1: ["HLT", 0],
-            130: ["LDI", 2],
-            71: ["PRN", 1]
+            1: ["HLT", 0, None],
+            130: ["LDI", 2, None],
+            71: ["PRN", 1, None],
+            162: ["MLT", 2, "ALU"]
+        }
+
+        ops_func = {
+            "HLT": HLT,
+            "LDI": LDI,
+            "PRN": PRN,
+            "MLT": MLT
         }
 
         address = 0
-        while self.running:
-            num = self.binaryToDecimal(self.ram_read(address))
-            command = ops[num]
-            params = [0] * 2
-            print(command)
-            for i in range(0, command[1]):
-                address += 1
-                params[i] = self.ram_read(address)
 
-            self.alu(command[0], params[0], params[1])
+        while self.running:
+            memory_value1 = self.binaryToDecimal(self.ram_read(address))
+            memory_value2 = self.binaryToDecimal(self.ram_read(address + 1))
+            memory_value3 = self.binaryToDecimal(self.ram_read(address + 2))
+            operation = ops[memory_value1]
+            operation_func = ops_func[operation[0]]
+
+            if operation[1] == 0:
+                operation_func()
+            elif operation[1] == 1:
+                operation_func(memory_value2)
+                address += 1
+            elif operation[1] == 2:
+                if operation[2] == "ALU":
+                    operation_func(operation[0], memory_value2, memory_value3)
+                else:
+                    operation_func(memory_value2, memory_value3)
+                address += 2
 
             address += 1
+
+
+cpu = CPU()
+cpu.load('mult.ls8')
+cpu.run()
