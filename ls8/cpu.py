@@ -10,13 +10,14 @@ class CPU:
         """Construct a new CPU."""
         self.memory = [0] * 256
         self.reg = [0] * 8
+        self.stack = -1
         self.running = False
 
-    def ram_read(self, register):
-        return self.memory[register]
+    def ram_read(self, address):
+        return self.memory[address]
 
-    def ram_write(self, value, register):
-        self.memory[register] = value
+    def ram_write(self, value, address):
+        self.memory[address] = value
 
     def load(self, file_):
         """Load a program into memory."""
@@ -27,7 +28,8 @@ class CPU:
             for line in f:
                 line = line.split("#")
                 try:
-                    v = int(line[0])
+                    v = int(line[0], 2)
+                    # print(v)
                     program.append(v)
                 except ValueError:
                     continue
@@ -70,70 +72,68 @@ class CPU:
 
         print()
 
-    def binaryToDecimal(self, binary):
-        binary1 = binary
-        decimal, i, n = 0, 0, 0
-        while(binary != 0):
-            dec = binary % 10
-            decimal = decimal + dec * pow(2, i)
-            binary = binary//10
-            i += 1
-        return decimal
-
     def run(self):
         """Run the CPU."""
         self.running = True
 
-        def HLT():
+        def HLT(z, x):
             self.running = False
 
         def LDI(register, value):
             self.reg[register] = value
 
-        def PRN(register):
+        def PRN(register, z):
             print(self.reg[register])
 
         def MLT(op, reg_1, reg_2):
             self.alu(op, reg_1, reg_2)
 
+        def PSH(register, z):
+            self.memory.append(self.reg[register])
+            self.stack -= 1
+            del self.memory[self.stack]
+
+        def POP(register, z):
+            LDI(register, self.memory.pop())
+            self.stack += 1
+            self.memory.insert(self.stack, 0)
+
         ops = {
             1: ["HLT", 0, None],
             130: ["LDI", 2, None],
             71: ["PRN", 1, None],
-            162: ["MLT", 2, "ALU"]
+            162: ["MLT", 2, "ALU"],
+            69: ["PSH", 1, "STK"],
+            70: ["POP", 1, "STK"]
         }
 
         ops_func = {
             "HLT": HLT,
             "LDI": LDI,
             "PRN": PRN,
-            "MLT": MLT
+            "MLT": MLT,
+            "PSH": PSH,
+            "POP": POP
         }
 
         address = 0
 
         while self.running:
-            memory_value1 = self.binaryToDecimal(self.ram_read(address))
-            memory_value2 = self.binaryToDecimal(self.ram_read(address + 1))
-            memory_value3 = self.binaryToDecimal(self.ram_read(address + 2))
+            memory_value1 = self.ram_read(address)
+            memory_value2 = self.ram_read(address + 1)
+            memory_value3 = self.ram_read(address + 2)
             operation = ops[memory_value1]
             operation_func = ops_func[operation[0]]
 
-            if operation[1] == 0:
-                operation_func()
-            elif operation[1] == 1:
-                operation_func(memory_value2)
-                address += 1
-            elif operation[1] == 2:
-                if operation[2] == "ALU":
-                    operation_func(operation[0], memory_value2, memory_value3)
-                else:
-                    operation_func(memory_value2, memory_value3)
-                address += 2
+            if operation[2] == "ALU":
+                operation_func(operation[0], memory_value2, memory_value3)
+            else:
+                operation_func(memory_value2, memory_value3)
 
+            address += operation[1]
             address += 1
 
 
 cpu = CPU()
-cpu.load('mult.ls8')
+cpu.load('stack.ls8')
 cpu.run()
