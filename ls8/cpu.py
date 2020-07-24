@@ -47,6 +47,13 @@ class CPU:
             self.reg[reg_a] -= self.reg[reg_b]
         elif op == "MLT":
             self.reg[reg_a] *= self.reg[reg_b]
+        elif op == "CMP":
+            if self.reg[reg_a] > self.reg[reg_b]:
+                self.reg[6] = 2
+            elif self.reg[reg_a] < self.reg[reg_b]:
+                self.reg[6] = 4
+            else:
+                self.reg[6] = 1
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -69,6 +76,9 @@ class CPU:
         def ADD(reg_1, reg_2):
             self.alu("ADD", reg_1, reg_2)
 
+        def CMP(reg_1, reg_2):
+            self.alu("CMP", reg_1, reg_2)
+
         def PSH(register, y):
             self.memory.append(self.reg[register])
             self.stack -= 1
@@ -79,14 +89,25 @@ class CPU:
             self.stack += 1
             self.memory.insert(self.stack, 0)
 
-        def CAL(register, y):
+        def CAL(register, offset=0):
             LDI(7, self.address)
-            PSH(7, y)
-            self.address = self.reg[register]
+            PSH(7, None)
+            self.address = self.reg[register] + offset
 
         def RET(x, y):
-            POP(7, y)
+            POP(7, None)
             self.address = self.reg[7]
+
+        def JEQ(register, y):
+            if self.reg[6] == 1:
+                CAL(register, -2)
+
+        def JNE(register, y):
+            if self.reg[6] != 1:
+                CAL(register, -2)
+
+        def JMP(register, y):
+            self.address = self.reg[register]
 
         ops = {
             1: [HLT, 0],
@@ -95,9 +116,13 @@ class CPU:
             70: [POP, 1],
             71: [PRN, 1],
             80: [CAL, -1],
+            84: [JMP, -1],
+            85: [JEQ, 1],
+            86: [JNE, 1],
             130: [LDI, 2],
             160: [ADD, 2],
-            162: [MLT, 2]
+            162: [MLT, 2],
+            167: [CMP, 2]
         }
 
         while self.running:
@@ -112,5 +137,5 @@ class CPU:
 
 
 cpu = CPU()
-cpu.load('call.ls8')
+cpu.load('sctest.ls8')
 cpu.run()
