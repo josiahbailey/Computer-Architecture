@@ -1,65 +1,141 @@
 """CPU functionality."""
 
-import sys
 
 class CPU:
     """Main CPU class."""
 
     def __init__(self):
         """Construct a new CPU."""
-        pass
+        self.memory = [0] * 256
+        self.reg = [0] * 8
+        self.stack = -1
+        self.address = 0
+        self.running = False
 
-    def load(self):
+    def ram_read(self, address):
+        return self.memory[address]
+
+    def ram_write(self, value, address):
+        self.memory[address] = value
+
+    def load(self, file_):
         """Load a program into memory."""
 
-        address = 0
+        program = []
 
-        # For now, we've just hardcoded a program:
+        with open(f'ls8/examples/{file_}') as f:
+            for line in f:
+                line = line.split("#")
+                try:
+                    v = int(line[0], 2)
+                    program.append(v)
+                except ValueError:
+                    continue
 
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
+                for instruction in program:
+                    self.ram_write(instruction, self.address)
+                    self.address += 1
 
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
-
+                self.address = 0
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
 
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
-        #elif op == "SUB": etc
+        elif op == "SUB":
+            self.reg[reg_a] -= self.reg[reg_b]
+        elif op == "MLT":
+            self.reg[reg_a] *= self.reg[reg_b]
+        elif op == "CMP":
+            if self.reg[reg_a] > self.reg[reg_b]:
+                self.reg[6] = 2
+            elif self.reg[reg_a] < self.reg[reg_b]:
+                self.reg[6] = 4
+            else:
+                self.reg[6] = 1
         else:
             raise Exception("Unsupported ALU operation")
 
-    def trace(self):
-        """
-        Handy function to print out the CPU state. You might want to call this
-        from run() if you need help debugging.
-        """
-
-        print(f"TRACE: %02X | %02X %02X %02X |" % (
-            self.pc,
-            #self.fl,
-            #self.ie,
-            self.ram_read(self.pc),
-            self.ram_read(self.pc + 1),
-            self.ram_read(self.pc + 2)
-        ), end='')
-
-        for i in range(8):
-            print(" %02X" % self.reg[i], end='')
-
-        print()
-
     def run(self):
         """Run the CPU."""
-        pass
+        self.running = True
+
+        def HLT(x, y):
+            self.running = False
+
+        def LDI(register, value):
+            self.reg[register] = value
+
+        def PRN(register, y):
+            print(self.reg[register])
+
+        def MLT(reg_1, reg_2):
+            self.alu("MLT", reg_1, reg_2)
+
+        def ADD(reg_1, reg_2):
+            self.alu("ADD", reg_1, reg_2)
+
+        def CMP(reg_1, reg_2):
+            self.alu("CMP", reg_1, reg_2)
+
+        def PSH(register, y):
+            self.memory.append(self.reg[register])
+            self.stack -= 1
+            del self.memory[self.stack]
+
+        def POP(register, y):
+            LDI(register, self.memory.pop())
+            self.stack += 1
+            self.memory.insert(self.stack, 0)
+
+        def CAL(register, offset=0):
+            LDI(7, self.address)
+            PSH(7, None)
+            self.address = self.reg[register] + offset
+
+        def RET(x, y):
+            POP(7, None)
+            self.address = self.reg[7]
+
+        def JEQ(register, y):
+            if self.reg[6] == 1:
+                CAL(register, -2)
+
+        def JNE(register, y):
+            if self.reg[6] != 1:
+                CAL(register, -2)
+
+        def JMP(register, y):
+            self.address = self.reg[register]
+
+        ops = {
+            1: [HLT, 0],
+            17: [RET, 1],
+            69: [PSH, 1],
+            70: [POP, 1],
+            71: [PRN, 1],
+            80: [CAL, -1],
+            84: [JMP, -1],
+            85: [JEQ, 1],
+            86: [JNE, 1],
+            130: [LDI, 2],
+            160: [ADD, 2],
+            162: [MLT, 2],
+            167: [CMP, 2]
+        }
+
+        while self.running:
+            memory_value1 = self.ram_read(self.address)
+            memory_value2 = self.ram_read(self.address + 1)
+            memory_value3 = self.ram_read(self.address + 2)
+            operation = ops[memory_value1]
+
+            operation[0](memory_value2, memory_value3)
+
+            self.address += operation[1] + 1
+
+
+cpu = CPU()
+cpu.load('sctest.ls8')
+cpu.run()
